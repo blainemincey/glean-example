@@ -32,6 +32,7 @@ function sanitizeFields(raw: string): string[] {
 
 const app = express();
 app.use(express.json());
+app.use(express.static(resolve(import.meta.dirname, "../public")));
 
 // Health / status
 app.get("/health", async (_req, res) => {
@@ -51,7 +52,7 @@ app.get("/oauth/login", async (_req, res) => {
       return;
     }
     await glean.close(conn);
-    res.json({ status: "already_connected" });
+    res.redirect("/");
   } catch (error) {
     console.error("OAuth login failed:", (error as Error).message);
     res.status(500).json({ error: "OAuth login failed" });
@@ -75,7 +76,7 @@ app.get("/oauth/callback", async (req, res) => {
     await tokenStore.save({ ...material, oauthState: undefined });
     const conn = await glean.finishAuth(tokenStore, config, code);
     await glean.close(conn);
-    res.json({ status: "connected" });
+    res.redirect("/");
   } catch (error) {
     console.error("OAuth callback failed:", (error as Error).message);
     res.status(500).json({ error: "OAuth callback failed" });
@@ -178,8 +179,5 @@ app.get("/api/opportunity/:id", async (req, res) => {
 
 app.listen(config.port, "127.0.0.1", () => {
   console.log(`Glean example server running on http://localhost:${config.port}`);
-  console.log(`  Health:     GET  http://localhost:${config.port}/health`);
-  console.log(`  Login:      GET  http://localhost:${config.port}/oauth/login  (open in browser)`);
-  console.log(`  Query:      POST http://localhost:${config.port}/api/query`);
-  console.log(`  Opportunity: GET http://localhost:${config.port}/api/opportunity/:sfdc_id`);
+  console.log(`  Open http://localhost:${config.port} in your browser`);
 });

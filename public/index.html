@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Glean Opportunity Lookup</title>
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --border: #dee2e6;
+      --text: #212529;
+      --text-muted: #6c757d;
+      --primary: #0b6623;
+      --primary-hover: #094d1b;
+      --error: #dc3545;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1a1a2e;
+        --surface: #16213e;
+        --border: #374151;
+        --text: #e5e7eb;
+        --text-muted: #9ca3af;
+        --primary: #22c55e;
+        --primary-hover: #16a34a;
+        --error: #f87171;
+        --shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 16px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      padding: 32px 0 24px;
+    }
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    header p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      margin-bottom: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      box-shadow: var(--shadow);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--primary); }
+    .status-bar a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .status-bar a:hover { text-decoration: underline; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .form-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .form-row input[type="text"] {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-row input:focus { border-color: var(--primary); }
+    button {
+      padding: 10px 20px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    button:hover { background: var(--primary-hover); }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .fields-help {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .fields-help code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.78rem;
+    }
+    #results {
+      display: none;
+    }
+    #results.visible {
+      display: block;
+    }
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+    .result-header h2 { margin-bottom: 0; }
+    .result-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .result-body {
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      max-height: 600px;
+      overflow-y: auto;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .error-msg {
+      color: var(--error);
+      font-weight: 500;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Glean Opportunity Lookup</h1>
+      <p>Query Salesforce opportunity data through Glean MCP</p>
+    </header>
+
+    <div class="status-bar" id="statusBar">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Checking connection...</span>
+    </div>
+
+    <div class="card">
+      <h2>Opportunity Query</h2>
+      <form id="queryForm">
+        <div class="form-row">
+          <input type="text" id="opportunityId" placeholder="Salesforce Opportunity ID (e.g. 006...)" required autofocus>
+          <button type="submit" id="submitBtn">Search</button>
+        </div>
+        <p class="fields-help">
+          Returns: <code>ARR</code> <code>ERR</code> <code>champions</code>
+          <code>go-live dates</code> <code>deal stage</code> <code>close date</code>
+          <code>key stakeholders</code>
+        </p>
+      </form>
+    </div>
+
+    <div class="card" id="results">
+      <div class="result-header">
+        <h2>Results</h2>
+        <span class="result-meta" id="resultMeta"></span>
+      </div>
+      <div class="result-body" id="resultBody"></div>
+    </div>
+  </div>
+
+  <script>
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const form = document.getElementById("queryForm");
+    const input = document.getElementById("opportunityId");
+    const submitBtn = document.getElementById("submitBtn");
+    const results = document.getElementById("results");
+    const resultBody = document.getElementById("resultBody");
+    const resultMeta = document.getElementById("resultMeta");
+
+    async function checkStatus() {
+      try {
+        const res = await fetch("/health");
+        const data = await res.json();
+        if (data.authenticated) {
+          statusDot.classList.add("connected");
+          statusText.textContent = "Connected to Glean";
+          submitBtn.disabled = false;
+        } else {
+          statusDot.classList.remove("connected");
+          statusText.innerHTML = 'Not connected — <a href="/oauth/login">Sign in with Glean</a>';
+          submitBtn.disabled = true;
+        }
+      } catch {
+        statusText.textContent = "Unable to reach server";
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = input.value.trim();
+      if (!id) return;
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner"></span>Searching…';
+      results.classList.add("visible");
+      resultBody.textContent = "";
+      resultMeta.textContent = "";
+
+      const start = Date.now();
+      try {
+        const res = await fetch(`/api/opportunity/${encodeURIComponent(id)}`);
+        const data = await res.json();
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+
+        if (!res.ok) {
+          resultBody.innerHTML = `<span class="error-msg">${escapeHtml(data.error || "Request failed")}</span>`;
+          if (data.authorization_url) {
+            window.location.href = data.authorization_url;
+          }
+        } else {
+          resultBody.textContent = data.text || "No results returned.";
+          resultMeta.textContent = `${elapsed}s`;
+        }
+      } catch (err) {
+        resultBody.innerHTML = `<span class="error-msg">Network error: ${escapeHtml(err.message)}</span>`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Search";
+      }
+    });
+
+    function escapeHtml(str) {
+      const d = document.createElement("div");
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    checkStatus();
+  </script>
+</body>
+</html>
