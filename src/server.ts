@@ -14,6 +14,19 @@ if (!config.mcpUrl) {
   process.exit(1);
 }
 
+// ── Validation ──────────────────────────────────────────────
+
+const SFDC_ID_RE = /^[a-zA-Z0-9]{15,18}$/;
+const ALLOWED_FIELDS = new Set([
+  "arr", "err", "champions", "go-live dates", "deal stage",
+  "close date", "key stakeholders", "use case", "timeline",
+  "decision criteria", "next steps", "compelling event",
+]);
+
+function sanitizeFields(raw: string): string[] {
+  return raw.split(",").map((f) => f.trim().toLowerCase()).filter((f) => ALLOWED_FIELDS.has(f));
+}
+
 // ── Express app ─────────────────────────────────────────────
 
 const app = express();
@@ -54,7 +67,7 @@ app.get("/oauth/callback", async (req, res) => {
   try {
     const material = await tokenStore.load();
     const returnedState = typeof req.query.state === "string" ? req.query.state : "";
-    if (material.oauthState && material.oauthState !== returnedState) {
+    if (!material.oauthState || material.oauthState !== returnedState) {
       res.status(400).json({ error: "OAuth state mismatch" });
       return;
     }
@@ -86,7 +99,8 @@ app.get("/api/tools", async (_req, res) => {
     await glean.close(conn);
     res.json({ tools });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    console.error("Tool listing failed:", (error as Error).message);
+    res.status(500).json({ error: "Failed to list tools" });
   }
 });
 
@@ -111,7 +125,8 @@ app.post("/api/query", async (req, res) => {
       is_error: result.isError,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    console.error("Query failed:", (error as Error).message);
+    res.status(500).json({ error: "Query failed" });
   } finally {
     if (conn) await glean.close(conn);
   }
@@ -120,10 +135,19 @@ app.post("/api/query", async (req, res) => {
 // Convenience endpoint — query by Salesforce opportunity ID
 app.get("/api/opportunity/:id", async (req, res) => {
   const opportunityId = req.params.id;
-  const fields = String(req.query.fields ?? "ARR, ERR, champions, go-live dates, deal stage, close date, key stakeholders");
+  if (!SFDC_ID_RE.test(opportunityId)) {
+    res.status(400).json({ error: "Invalid Salesforce Opportunity ID format" });
+    return;
+  }
+  const rawFields = String(req.query.fields ?? "ARR, ERR, champions, go-live dates, deal stage, close date, key stakeholders");
+  const fields = sanitizeFields(rawFields);
+  if (fields.length === 0) {
+    res.status(400).json({ error: "No recognized fields requested", allowed: [...ALLOWED_FIELDS] });
+    return;
+  }
   const message = [
     `Find the following for Salesforce Opportunity ID ${opportunityId}:`,
-    ...fields.split(",").map((f) => `- ${f.trim()}`),
+    ...fields.map((f) => `- ${f}`),
     "",
     "Return source-backed evidence with references.",
   ].join("\n");
@@ -142,7 +166,8 @@ app.get("/api/opportunity/:id", async (req, res) => {
       is_error: result.isError,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    console.error("Opportunity query failed:", (error as Error).message);
+    res.status(500).json({ error: "Opportunity query failed" });
   } finally {
     if (conn) await glean.close(conn);
   }
@@ -150,7 +175,7 @@ app.get("/api/opportunity/:id", async (req, res) => {
 
 // ── Start ───────────────────────────────────────────────────
 
-app.listen(config.port, () => {
+app.listen(config.port, "127.0.0.1", () => {
   console.log(`Glean example server running on http://localhost:${config.port}`);
   console.log(`  Health:     GET  http://localhost:${config.port}/health`);
   console.log(`  Login:      GET  http://localhost:${config.port}/oauth/login  (open in browser)`);
