@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
 import { resolve } from "node:path";
+import "dotenv/config";
 import { loadConfig } from "./config.js";
 import { FileTokenStore } from "./token-store.js";
 import * as glean from "./glean-client.js";

@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import "dotenv/config";
 import express from "express";
 import { loadConfig } from "./config.js";
 import { FileTokenStore } from "./token-store.js";
